@@ -1,0 +1,17 @@
+{
+    "languageserver": {
+        "hdlChecker": {
+            "command": "hdl_checker", 
+            "args": [
+                "--lsp"
+            ],
+            "filetypes": [
+                "vhdl",
+                "verilog",
+                "systemverilog"
+            ]
+        }
+    },    
+
+    "rust.sysroot":"/home/mos/.rustup/toolchains/stable-x86_64-unknown-linux-gnu"
+}
