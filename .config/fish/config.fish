@@ -1,7 +1,7 @@
 # Change the prompt
 function fish_prompt
     set_color brblue --bold
-    printf '[%s]> ' (prompt_pwd)  
+    printf '[%s]> ' (prompt_pwd)
     set_color normal
 end
 
@@ -13,4 +13,4 @@ export LS_COLORS
 cd ~
 
 # Dotfiles management
-alias config='/usr/bin/git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
+alias dotfiles='/usr/bin/git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
