@@ -1,5 +1,4 @@
-# More dotfiles!
-Inspired by this [article](https://www.atlassian.com/git/tutorials/dotfiles).
+# Dotfiles!
+I used this [Atlassian article](https://www.atlassian.com/git/tutorials/dotfiles) to set this up.
 
-My typical enviornment is Alacritty, Neovim, and Fish (Ubuntu & Windows 10 WSL). I tried to keep these simple,
-so I could actually keep track of everything, otherwise, nothing too exciting!
+My typical enviornment is Alacritty, Neovim, and Tmux. I keep these simple, so I can actually keep track of everything.
