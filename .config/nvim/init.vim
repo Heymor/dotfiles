@@ -69,6 +69,10 @@ autocmd FileType nerdtree setlocal signcolumn=no
 " Embrace the stability
 let g:NERDTreeWinPos = "right"
 
+" vim-gitgutter
+" ====================================================
+set updatetime=250
+
 " Airline
 " ====================================================
 " Load in airline customization
