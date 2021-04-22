@@ -2,24 +2,17 @@
 " ====================================================
 filetype plugin indent on
 
-" Make sure that vim-plug is installed
-let data_dir = has('nvim') ? stdpath('data') . '/site' : '~/.vim'
-if empty(glob(data_dir . '/autoload/plug.vim'))
-  silent execute '!curl -fLo '.data_dir.'/autoload/plug.vim --create-dirs  https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim'
-  autocmd VimEnter * PlugInstall --sync | source $MYVIMRC
-endif
-
 call plug#begin('~/.local/share/nvim/plugged')
-" Apperance
 Plug 'ayu-theme/ayu-vim'
 Plug 'vim-airline/vim-airline-themes'
 Plug 'vim-airline/vim-airline'
 
-" Functionality
 Plug 'zhou13/vim-easyescape'
 Plug 'scrooloose/nerdtree'
 Plug 'airblade/vim-gitgutter'
 Plug 'christoomey/vim-tmux-navigator'
+Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
+Plug 'junegunn/fzf.vim'
 call plug#end()
 
 " Apperance
@@ -40,6 +33,10 @@ syntax on
 set tabstop=4 shiftwidth=4 expandtab smarttab
 set hidden
 set nu rnu
+" GitGutter go burrr
+set updatetime=200
+" Only enable the mouse in normal and visual modes
+set mouse=nv
 let mapleader = ","
 " Removing trailing whitespaces
 fun! TrimWhitespace()
@@ -69,9 +66,32 @@ autocmd FileType nerdtree setlocal signcolumn=no
 " Embrace the stability
 let g:NERDTreeWinPos = "right"
 
-" vim-gitgutter
+" FZF
 " ====================================================
-set updatetime=250
+" Empty value to disable preview window altogether
+let g:fzf_preview_window = []
+nnoremap <silent> <leader>b :Buffers<CR>
+nnoremap <silent> <leader>f :Files<CR>
+
+let g:fzf_action = {
+  \ 'ctrl-h': 'split',
+  \ 'ctrl-v': 'vsplit' }
+
+" Fix the colors in the FZF prompt
+let g:fzf_colors =
+\ { 'fg':      ['fg', 'Normal'],
+  \ 'bg':      ['bg', 'Normal'],
+  \ 'hl':      ['fg', 'Comment'],
+  \ 'fg+':     ['fg', 'CursorLine', 'CursorColumn', 'Normal'],
+  \ 'bg+':     ['bg', 'Normal', 'CursorColumn'],
+  \ 'hl+':     ['fg', 'Statement'],
+  \ 'info':    ['fg', 'PreProc'],
+  \ 'border':  ['fg', 'Ignore'],
+  \ 'prompt':  ['fg', 'Conditional'],
+  \ 'pointer': ['fg', 'Exception'],
+  \ 'marker':  ['fg', 'Keyword'],
+  \ 'spinner': ['fg', 'Label'],
+  \ 'header':  ['fg', 'Comment'] }
 
 " Airline
 " ====================================================
