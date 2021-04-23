@@ -13,6 +13,7 @@ Plug 'airblade/vim-gitgutter'
 Plug 'christoomey/vim-tmux-navigator'
 Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
 Plug 'junegunn/fzf.vim'
+Plug 'ludovicchabant/vim-gutentags'
 call plug#end()
 
 " Apperance
@@ -92,6 +93,14 @@ let g:fzf_colors =
   \ 'marker':  ['fg', 'Keyword'],
   \ 'spinner': ['fg', 'Label'],
   \ 'header':  ['fg', 'Comment'] }
+
+" vim-gutentags
+" ====================================================
+" Don't store tags in the project
+if !isdirectory('~/.tags')
+    call mkdir($HOME . "/.tags", "p")
+endif
+g:gutentags_cache_dir=$HOME . '/.tags'
 
 " Airline
 " ====================================================
