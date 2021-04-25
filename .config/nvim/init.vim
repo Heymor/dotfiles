@@ -73,6 +73,9 @@ let g:NERDTreeWinPos = "right"
 let g:fzf_preview_window = []
 nnoremap <silent> <leader>b :Buffers<CR>
 nnoremap <silent> <leader>f :Files<CR>
+" FZF expects tags in the home directory of project, so don't use
+" vim-gutentags's cache dir
+nnoremap <silent> <leader>t :Tags<CR>
 
 let g:fzf_action = {
   \ 'ctrl-h': 'split',
@@ -93,14 +96,6 @@ let g:fzf_colors =
   \ 'marker':  ['fg', 'Keyword'],
   \ 'spinner': ['fg', 'Label'],
   \ 'header':  ['fg', 'Comment'] }
-
-" vim-gutentags
-" ====================================================
-" Don't store tags in the project
-if !isdirectory('~/.tags')
-    call mkdir($HOME . "/.tags", "p")
-endif
-g:gutentags_cache_dir=$HOME . '/.tags'
 
 " Airline
 " ====================================================
