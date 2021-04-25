@@ -3,17 +3,22 @@
 filetype plugin indent on
 
 call plug#begin('~/.local/share/nvim/plugged')
+" Appearance
 Plug 'ayu-theme/ayu-vim'
 Plug 'vim-airline/vim-airline-themes'
 Plug 'vim-airline/vim-airline'
 
+" Functionality
 Plug 'zhou13/vim-easyescape'
 Plug 'scrooloose/nerdtree'
 Plug 'airblade/vim-gitgutter'
 Plug 'christoomey/vim-tmux-navigator'
 Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
 Plug 'junegunn/fzf.vim'
+
+" Completion
 Plug 'ludovicchabant/vim-gutentags'
+Plug 'lifepillar/vim-mucomplete'
 call plug#end()
 
 " Apperance
@@ -96,6 +101,14 @@ let g:fzf_colors =
   \ 'marker':  ['fg', 'Keyword'],
   \ 'spinner': ['fg', 'Label'],
   \ 'header':  ['fg', 'Comment'] }
+
+" vim-μcomplete
+" ====================================================
+let g:mucomplete#enable_auto_at_startup = 1
+let g:mucomplete#completion_delay = 1
+set completeopt+=menuone,noselect
+set completeopt-=preview
+set shortmess+=c
 
 " Airline
 " ====================================================
