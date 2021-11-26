@@ -4,17 +4,13 @@ filetype plugin indent on
 
 call plug#begin('~/.local/share/nvim/plugged')
 " Appearance
-Plug 'ayu-theme/ayu-vim'
-Plug 'vim-airline/vim-airline-themes'
-Plug 'vim-airline/vim-airline'
+Plug 'shatur/neovim-ayu'
+Plug 'nvim-lualine/lualine.nvim'
 
 " Functionality
-Plug 'zhou13/vim-easyescape'
 Plug 'scrooloose/nerdtree'
 Plug 'airblade/vim-gitgutter'
 Plug 'christoomey/vim-tmux-navigator'
-Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
-Plug 'junegunn/fzf.vim'
 
 " Completion
 Plug 'ludovicchabant/vim-gutentags'
@@ -25,11 +21,9 @@ call plug#end()
 " ====================================================
 set termguicolors
 set background=dark
-set t_Co=256
-let ayucolor="mirage"
-colorscheme ayu
-let g:airline_theme="ayu_mirage"
+colorscheme ayu-mirage
 let g:airline_powerline_fonts=1
+let g:airline_theme="ayu_mirage"
 
 " Editor
 " ====================================================
@@ -38,7 +32,7 @@ set encoding=utf-8
 syntax on
 set tabstop=4 shiftwidth=4 expandtab smarttab
 set hidden
-set nu rnu
+set number
 " GitGutter go burrr
 set updatetime=200
 " Only enable the mouse in normal and visual modes
@@ -51,13 +45,8 @@ fun! TrimWhitespace()
     call winrestview(l:save)
 endfun
 command! TrimWhitespace call TrimWhitespace()
-
-" Easy Escape
-" ====================================================
-" jj as <ESC>
-let g:easyescape_chars = { "j" : 2 }
-let g:easyescape_timeout = 200
-cnoremap jj <ESC>
+" Quickly change buffers
+nnoremap <leader><leader> :ls<CR>:b<Space>
 
 " NERDTree
 " ====================================================
@@ -72,45 +61,44 @@ autocmd FileType nerdtree setlocal signcolumn=no
 " Embrace the stability
 let g:NERDTreeWinPos = "right"
 
-" FZF
+" vim-mucomplete
 " ====================================================
-" Empty value to disable preview window altogether
-let g:fzf_preview_window = []
-nnoremap <silent> <leader>b :Buffers<CR>
-nnoremap <silent> <leader>f :Files<CR>
-" FZF expects tags in the home directory of project, so don't use
-" vim-gutentags's cache dir
-nnoremap <silent> <leader>t :Tags<CR>
-
-let g:fzf_action = {
-  \ 'ctrl-h': 'split',
-  \ 'ctrl-v': 'vsplit' }
-
-" Fix the colors in the FZF prompt
-let g:fzf_colors =
-\ { 'fg':      ['fg', 'Normal'],
-  \ 'bg':      ['bg', 'Normal'],
-  \ 'hl':      ['fg', 'Comment'],
-  \ 'fg+':     ['fg', 'CursorLine', 'CursorColumn', 'Normal'],
-  \ 'bg+':     ['bg', 'Normal', 'CursorColumn'],
-  \ 'hl+':     ['fg', 'Statement'],
-  \ 'info':    ['fg', 'PreProc'],
-  \ 'border':  ['fg', 'Ignore'],
-  \ 'prompt':  ['fg', 'Conditional'],
-  \ 'pointer': ['fg', 'Exception'],
-  \ 'marker':  ['fg', 'Keyword'],
-  \ 'spinner': ['fg', 'Label'],
-  \ 'header':  ['fg', 'Comment'] }
-
-" vim-μcomplete
-" ====================================================
-let g:mucomplete#enable_auto_at_startup = 1
-let g:mucomplete#completion_delay = 1
+let g:mucomplete#enable_auto_at_startup=1
+let g:mucomplete#completion_delay=1
 set completeopt+=menuone,noselect
 set completeopt-=preview
 set shortmess+=c
 
-" Airline
+" Lualine
 " ====================================================
-" Load in airline customization
-so ~/.config/nvim/statusline.vim
+lua <<EOF
+require'lualine'.setup {
+  options = {
+    icons_enabled = true,
+    theme = 'ayu',
+    component_separators = '',
+    section_separators = '',
+    disabled_filetypes = {},
+    always_divide_middle = true,
+  },
+  sections = {
+    lualine_a = {'mode'},
+    lualine_b = {'branch', 'diff',
+                  {'diagnostics', sources={'nvim_lsp'}}},
+    lualine_c = {'filename'},
+    lualine_x = {'encoding', 'fileformat', 'filetype'},
+    lualine_y = {'progress'},
+    lualine_z = {'location'}
+  },
+  inactive_sections = {
+    lualine_a = {},
+    lualine_b = {},
+    lualine_c = {'filename'},
+    lualine_x = {'location'},
+    lualine_y = {},
+    lualine_z = {}
+  },
+  tabline = {},
+  extensions = {}
+}
+EOF
