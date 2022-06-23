@@ -45,8 +45,10 @@ fun! TrimWhitespace()
     call winrestview(l:save)
 endfun
 command! TrimWhitespace call TrimWhitespace()
+
 " Quickly change buffers
 nnoremap <leader><leader> :ls<CR>:b<Space>
+nnoremap <leader><tab> :b#<CR>
 
 " NERDTree
 " ====================================================
