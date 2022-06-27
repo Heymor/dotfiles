@@ -1,22 +1,12 @@
 #!/usr/bin/env python3
-import base64
 import argparse
 import datetime
-import os
 
-import yagmail
+import helpers.email_helper as email_helper
 
 def email_send_qtask(due_date, task, task_notes):
-    subject = due_date.strftime("%d/%m/%Y") + ' - ' + task
-    email_send_message(subject, task_notes)
-
-def email_send_message(subject, notes):
-    email = os.environ['EMAIL_ACCOUNT_ADDR']
-    gmail_app_password = os.environ['EMAIL_ACCOUNT_KEY']
-
-    yag = yagmail.SMTP(email, gmail_app_password)
-
-    yag.send(to=email, subject=subject, contents=notes)
+    subject = due_date.strftime("%-m/%-d/%Y") + ' - ' + task
+    email_helper.email_send_message(subject, task_notes)
     
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Create a quick task.')
