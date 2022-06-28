@@ -17,6 +17,16 @@ Plug 'ludovicchabant/vim-gutentags'
 Plug 'lifepillar/vim-mucomplete'
 call plug#end()
 
+" OS detection
+" ====================================================
+if !exists("g:os")
+    if has("win64") || has("win32") || has("win16")
+        let g:os = "Windows"
+    else
+        let g:os = substitute(system('uname'), '\n', '', '')
+    endif
+endif
+
 " Apperance
 " ====================================================
 set termguicolors
@@ -70,6 +80,13 @@ let g:mucomplete#completion_delay=1
 set completeopt+=menuone,noselect
 set completeopt-=preview
 set shortmess+=c
+
+" gutentags
+" ====================================================
+" Macbook executable is not where gutentags exepects it
+if g:os == "Darwin"
+    let g:gutentags_ctags_executable='/opt/homebrew/bin/ctags'
+endif
 
 " Lualine
 " ====================================================
