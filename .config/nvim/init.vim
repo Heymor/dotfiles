@@ -60,6 +60,12 @@ command! TrimWhitespace call TrimWhitespace()
 nnoremap <leader><leader> :ls<CR>:b<Space>
 nnoremap <leader><tab> :b#<CR>
 
+" Fuzzy finding
+set path+=**
+set wildmenu
+set wildignore+=**/__pycache__/**,**/.git/**
+nnoremap <leader>f :find *
+
 " NERDTree
 " ====================================================
 " Close vim if the only window left open is NERDTree
