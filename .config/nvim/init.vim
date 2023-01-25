@@ -81,11 +81,11 @@ let g:NERDTreeWinPos = "right"
 
 " vim-mucomplete
 " ====================================================
-let g:mucomplete#enable_auto_at_startup=1
-let g:mucomplete#completion_delay=1
 set completeopt+=menuone,noselect
 set completeopt-=preview
 set shortmess+=c
+let g:mucomplete#enable_auto_at_startup=1
+let g:mucomplete#completion_delay=1
 
 " gutentags
 " ====================================================
