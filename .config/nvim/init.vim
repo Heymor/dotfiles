@@ -12,28 +12,25 @@ Plug 'scrooloose/nerdtree'
 Plug 'airblade/vim-gitgutter'
 Plug 'christoomey/vim-tmux-navigator'
 
-" Completion
-Plug 'ludovicchabant/vim-gutentags'
-Plug 'lifepillar/vim-mucomplete'
-call plug#end()
+" LSP Support
+Plug 'neovim/nvim-lspconfig'
+Plug 'williamboman/mason.nvim', {'do': ':MasonUpdate'}
+Plug 'williamboman/mason-lspconfig.nvim'
 
-" OS detection
-" ====================================================
-if !exists("g:os")
-    if has("win64") || has("win32") || has("win16")
-        let g:os = "Windows"
-    else
-        let g:os = substitute(system('uname'), '\n', '', '')
-    endif
-endif
+" Autocompletion & Snips
+Plug 'hrsh7th/nvim-cmp'         " Required
+Plug 'hrsh7th/cmp-nvim-lsp'     " Required
+Plug 'L3MON4D3/LuaSnip'         " Required
+
+" LSP Setup
+Plug 'VonHeikemen/lsp-zero.nvim', {'branch': 'v2.x'}
+call plug#end()
 
 " Apperance
 " ====================================================
 set termguicolors
 set background=dark
 colorscheme ayu-mirage
-let g:airline_powerline_fonts=1
-let g:airline_theme="ayu_mirage"
 
 " Editor
 " ====================================================
@@ -79,51 +76,66 @@ autocmd FileType nerdtree setlocal signcolumn=no
 " Embrace the stability
 let g:NERDTreeWinPos = "right"
 
-" vim-mucomplete
-" ====================================================
-set completeopt+=menuone,noselect
-set completeopt-=preview
-set shortmess+=c
-let g:mucomplete#enable_auto_at_startup=1
-let g:mucomplete#completion_delay=1
-
-" gutentags
-" ====================================================
-" Macbook executable is not where gutentags exepects it
-if g:os == "Darwin"
-    let g:gutentags_ctags_executable='/opt/homebrew/bin/ctags'
-endif
-
-" Lualine
+" Lua
 " ====================================================
 lua <<EOF
 require'lualine'.setup {
-  options = {
-    icons_enabled = true,
-    theme = 'ayu',
-    component_separators = '',
-    section_separators = '',
-    disabled_filetypes = {},
-    always_divide_middle = true,
-  },
-  sections = {
-    lualine_a = {'mode'},
-    lualine_b = {'branch', 'diff',
-                  {'diagnostics', sources={'nvim_lsp'}}},
-    lualine_c = {'filename'},
-    lualine_x = {'encoding', 'fileformat', 'filetype'},
-    lualine_y = {'progress'},
-    lualine_z = {'location'}
-  },
-  inactive_sections = {
-    lualine_a = {},
-    lualine_b = {},
-    lualine_c = {'filename'},
-    lualine_x = {'location'},
-    lualine_y = {},
-    lualine_z = {}
-  },
-  tabline = {},
-  extensions = {}
+    options = {
+        icons_enabled = true,
+        theme = 'ayu',
+        component_separators = '',
+        section_separators = '',
+        disabled_filetypes = {},
+        always_divide_middle = true,
+    },
+    sections = {
+        lualine_a = {'mode'},
+        lualine_b = {'branch', 'diff',
+                      {'diagnostics', sources={'nvim_lsp'}}},
+        lualine_c = {'filename'},
+        lualine_x = {'encoding', 'fileformat', 'filetype'},
+        lualine_y = {'progress'},
+        lualine_z = {'location'}
+    },
+    inactive_sections = {
+        lualine_a = {},
+        lualine_b = {},
+        lualine_c = {'filename'},
+        lualine_x = {'location'},
+        lualine_y = {},
+        lualine_z = {}
+    },
+    tabline = {},
+    extensions = {}
 }
+
+local lsp = require('lsp-zero').preset({})
+
+lsp.on_attach(function(client, bufnr)
+    lsp.default_keymaps({buffer = bufnr})
+end)
+
+local luasnip = require("luasnip")
+local cmp = require("cmp")
+local cmp_action = require('lsp-zero').cmp_action()
+cmp.setup({
+    mapping = {
+        ['<Tab>'] = cmp_action.luasnip_supertab(),
+        ['<S-Tab>'] = cmp_action.luasnip_shift_supertab(),
+    }
+})
+
+local lspconfig = require('lspconfig')
+
+lspconfig.clangd.setup({
+    cmd = {"clangd", 
+        -- The `--query-driver` arguement is a whitelist; thus, adding it to
+        -- the top level causes no issues when arm-none-eabi-g* isn't used.
+        "--query-driver=/opt/homebrew/bin/arm-none-eabi-g*",
+        "--compile-commands-dir=build"
+        }
+})
+
+lsp.setup()
+
 EOF
