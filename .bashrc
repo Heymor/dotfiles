@@ -2,6 +2,10 @@
 if [[ "$OSTYPE" == "darwin"* ]]; then
     export DISPLAY=:0
     export PATH=$PATH:/opt/homebrew/bin
+elif [[ "$OSTYPE" == "linux"* ]]; then
+    if [ -f /etc/bashrc ]; then
+        . /etc/bashrc
+    fi
 fi
 
 # add in custom scripts
