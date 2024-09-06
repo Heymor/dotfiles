@@ -5,6 +5,9 @@ hi NonText guifg=bg
 let launch_path='~/OneDrive/WorkDocs/_Archive/2024/_Drafts/'
 " create Note command for going to daily note
 command! Note execute 'edit ' . launch_path . strftime('%Y-%m-%d') . '.md'
+" Turn on spellcheck
+set spelllang=en_us
+set spell
 
 " hide and unhide TUI features function
 let s:hidden_all = 0
