@@ -5,7 +5,7 @@ filetype plugin indent on
 call plug#begin('~/.local/share/nvim/plugged')
 " Appearance
 Plug 'shatur/neovim-ayu'
-Plug 'nvim-lualine/lualine.nvim'
+Plug 'junegunn/goyo.vim'
 
 " Functionality
 Plug 'scrooloose/nerdtree'
@@ -29,8 +29,16 @@ call plug#end()
 " Apperance
 " ====================================================
 set termguicolors
-set background=dark
+" Check for apperance here so there's no flickering between
+" light and dark
 colorscheme ayu-mirage
+if exists("g:gui_vimr")
+    " VimR
+    set background=light
+else
+    " Terminal
+    set background=dark
+endif
 
 " Editor
 " ====================================================
@@ -79,36 +87,7 @@ let g:NERDTreeWinPos = "right"
 " Lua
 " ====================================================
 lua <<EOF
-require'lualine'.setup {
-    options = {
-        icons_enabled = true,
-        theme = 'ayu',
-        component_separators = '',
-        section_separators = '',
-        disabled_filetypes = {},
-        always_divide_middle = true,
-    },
-    sections = {
-        lualine_a = {'mode'},
-        lualine_b = {'branch', 'diff',
-                      {'diagnostics', sources={'nvim_lsp'}}},
-        lualine_c = {'filename'},
-        lualine_x = {'encoding', 'fileformat', 'filetype'},
-        lualine_y = {'progress'},
-        lualine_z = {'location'}
-    },
-    inactive_sections = {
-        lualine_a = {},
-        lualine_b = {},
-        lualine_c = {'filename'},
-        lualine_x = {'location'},
-        lualine_y = {},
-        lualine_z = {}
-    },
-    tabline = {},
-    extensions = {}
-}
-
+ 
 local lsp = require('lsp-zero').preset({})
 
 lsp.on_attach(function(client, bufnr)
