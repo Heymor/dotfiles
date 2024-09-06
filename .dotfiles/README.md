@@ -3,8 +3,6 @@ I used this [Atlassian article](https://www.atlassian.com/git/tutorials/dotfiles
 
 ## Dependencies
 - [vim-plug](https://github.com/junegunn/vim-plug)
-- [Starship](https://starship.rs/)
-- [yagmail](https://github.com/kootenpv/yagmail)
 
 ## Setting up the global `.gitignore`
 ```
