@@ -1,0 +1,369 @@
+#!/usr/bin/env python3
+"""
+BOM Order Quantity Calculator
+==============================
+Takes a KiCad-style BOM CSV, applies overage rules for SMT assembly,
+and outputs a new CSV with Order Qty and Overage Rule columns.
+
+Usage:
+    ./bom_calculator.py --bom BOM-v1p0.csv --pcbs 10 --output order.csv
+
+After a one-time `chmod +x bom_calculator.py` you can run it directly.
+
+─── Classification ────────────────────────────────────────────────────────────
+Components are classified by their KiCad footprint library prefix (the part
+before the colon), which reliably encodes the component category:
+
+  Discrete SMT  →  Table 2.1 rules, by imperial package size (0201 … 1206+)
+  Active SMT    →  Table 2.2 rules, by pitch; SOT/SC packages use a built-in
+                   pitch lookup table since they don't encode pitch in their
+                   footprint name
+  Through-hole  →  Connectors, terminal blocks, DIP — low per-unit overage
+  Modules       →  Large/expensive assembled modules — minimal overage
+  Test points   →  Small fixed overage
+  Mounting holes→  No overage (hardware, not lost in assembly)
+  Fallback      →  Anything unrecognised (custom libraries, etc.)
+
+─── DNP handling ──────────────────────────────────────────────────────────────
+DNP (Do Not Populate) components are kept in the output with Order Qty = 0.
+Detected via (in priority order):
+  1. A "DNP" column with a truthy value: 1 / yes / true / dnp
+  2. The word DNP in the "Value" field
+  3. The word DNP in the "Description" field
+"""
+
+import csv
+import re
+import math
+import argparse
+from pathlib import Path
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EDITABLE RULES
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Table 2.1 – Discrete SMT (resistors, capacitors, inductors, ferrite beads …)
+# Sub-classified by imperial package code found in the footprint name.
+DISCRETE_SMT_RULES = [
+    {"label": "0201",          "percent": 0.50, "minimum": 50},
+    {"label": "0402",          "percent": 0.25, "minimum": 20},
+    {"label": "0603",          "percent": 0.15, "minimum": 20},
+    {"label": "0805",          "percent": 0.10, "minimum": 10},
+    {"label": "1206_or_larger","percent": 0.10, "minimum": 10},
+]
+
+# Table 2.2 – Active SMT (ICs, transistors, diodes in SMT packages …)
+# Sub-classified by the smaller body dimension (mm). Smaller body = easier to
+# drop during hand-assembly prototyping, so smaller = more overage.
+# Listed in ascending size order.
+ACTIVE_SMT_RULES = [
+    {"label": "<=0.6 mm", "max_body": 0.60, "percent": 0.20, "minimum": 20},
+    {"label": "0.6–1 mm", "max_body": 1.00, "percent": 0.10, "minimum": 10},
+    {"label": "1–1.6 mm", "max_body": 1.60, "percent": 0.05, "minimum":  5},
+    {"label": "1.6–2 mm", "max_body": 2.00, "percent": 0.05, "minimum":  2},
+    {"label": ">2 mm",    "max_body": None, "percent": 0.05, "minimum":  1},
+]
+
+# Through-hole connectors, terminal blocks, DIP packages, etc.
+# Typically hand-placed; losses are rare but allow a small buffer.
+THROUGH_HOLE_RULE = {"label": "through-hole", "percent": 0.05, "minimum": 2}
+
+# Large assembled modules (e.g. Raspberry Pi Pico, WiFi modules).
+# Expensive and unlikely to be lost; order just one spare per run.
+MODULE_RULE = {"label": "module", "percent": 0.00, "minimum": 1}
+
+# Test points — cheap and plentiful, small fixed buffer.
+TEST_POINT_RULE = {"label": "test-point", "percent": 0.05, "minimum": 5}
+
+# Mounting hardware — ordered separately, never lost in SMT assembly.
+MOUNTING_HOLE_RULE = {"label": "mounting-hole", "percent": 0.00, "minimum": 0}
+
+# Catch-all for anything not matched above (custom libraries, etc.).
+FALLBACK_RULE = {"label": "fallback", "percent": 0.10, "minimum": 10}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FOOTPRINT LIBRARY → CATEGORY MAPPING
+# ─────────────────────────────────────────────────────────────────────────────
+# Each entry is (prefix_pattern, category).  The prefix is the part of the
+# KiCad footprint string before the colon, e.g. "Resistor_SMD".
+# Patterns are matched case-insensitively as prefixes of the library name.
+
+# Discrete SMT library prefixes
+_DISCRETE_SMT_LIBS = {
+    "Resistor_SMD",
+    "Capacitor_SMD",
+    "Inductor_SMD",
+    "Inductor_Shielded",
+    "Ferrite_Bead_SMD",
+    "Crystal",
+    "Oscillator",
+    "Diode_SMD",
+    "LED_SMD",
+}
+
+# Active SMT library prefixes
+_ACTIVE_SMT_LIBS = {
+    "Package_SO",
+    "Package_QFP",
+    "Package_QFN",
+    "Package_DFN_QFN",
+    "Package_TO_SOT_SMD",
+    "Package_BGA",
+    "Package_LGA",
+    "Package_TSSOP",
+    "Package_SSOP",
+    "Package_MSOP",
+    "Package_SON",
+    "Package_LCC",
+    "Package_CSP",
+    "Package_XFDFN",
+}
+
+# Through-hole library prefixes (connectors, terminal blocks, DIP ICs, etc.)
+_THROUGH_HOLE_LIBS = {
+    "Connector_PinHeader",
+    "Connector_PinSocket",
+    "Connector_JST",
+    "Connector_Molex",
+    "Connector_TE-Connectivity",
+    "Connector_Amphenol",
+    "Connector_Samtec",
+    "Connector_Hirose",
+    "Connector",          # generic catch-all for any other Connector_* lib
+    "TerminalBlock",      # matches TerminalBlock_Phoenix, TerminalBlock_Wago, etc.
+    "Package_DIP",
+    "Package_ZIP",
+    "Jumper",
+    "Relay_THT",
+    "Transformer_THT",
+    "Button_Switch_THT",
+}
+
+# Module library prefixes
+_MODULE_LIBS = {
+    "Module",
+    "RF_Module",
+}
+
+# Test point library prefixes
+_TEST_POINT_LIBS = {
+    "TestPoint",
+}
+
+# Mounting hardware library prefixes
+_MOUNTING_LIBS = {
+    "MountingHole",
+    "Fiducial",
+}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# NAMED PACKAGE BODY SIZE LOOKUP
+# ─────────────────────────────────────────────────────────────────────────────
+# For packages that don't encode their body dimensions in the KiCad footprint
+# name, we maintain an explicit table of the smaller body dimension (mm).
+# Values are the minimum of width and length for the standard package outline.
+
+PACKAGE_BODY_MM: dict[str, float] = {
+    # SOT-23 family (~1.3 x 2.9 mm body)
+    "SOT-23":        1.3,
+    "SOT-23-3":      1.3,
+    "SOT-23-5":      1.3,
+    "SOT-23-6":      1.3,
+    "SOT-23-8":      1.45,
+    # SC-70 / SOT-363 family (~1.25 x 2.0 mm body)
+    "SOT-363":       1.25,
+    "SC-70":         1.25,
+    "SC-70-5":       1.25,
+    "SC-70-6":       1.25,
+    # SOT-563 (~1.0 x 1.6 mm body)
+    "SOT-563":       1.0,
+    # SOT-89 (~2.4 x 4.5 mm body)
+    "SOT-89":        2.4,
+    "SOT-89-3":      2.4,
+    # SOT-223 (~3.5 x 6.5 mm body)
+    "SOT-223":       3.5,
+    # TO-252 DPAK (~6.0 x 6.6 mm body)
+    "TO-252":        6.0,
+    # TO-263 D2PAK (~8.7 x 10.0 mm body)
+    "TO-263":        8.7,
+}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DNP DETECTION
+# ─────────────────────────────────────────────────────────────────────────────
+
+_DNP_COLUMN_TRUTHY = {"1", "yes", "true", "dnp"}
+
+def is_dnp(row: dict) -> bool:
+    """Return True if this row is marked Do-Not-Populate."""
+    # 1. Dedicated DNP column (KiCad 7+ native BOM exporter)
+    if row.get("DNP", "").strip().lower() in _DNP_COLUMN_TRUTHY:
+        return True
+    # 2. Value field contains DNP as a whole word
+    if re.search(r'\bDNP\b', row.get("Value", ""), re.IGNORECASE):
+        return True
+    # 3. Description field contains DNP as a whole word
+    if re.search(r'\bDNP\b', row.get("Description", ""), re.IGNORECASE):
+        return True
+    return False
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CLASSIFICATION
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Imperial package codes for discrete SMT, matched in the footprint name.
+_DISCRETE_PACKAGES = [
+    (re.compile(r'(?<!\d)0201(?!\d)'), "0201"),
+    (re.compile(r'(?<!\d)0402(?!\d)'), "0402"),
+    (re.compile(r'(?<!\d)0603(?!\d)'), "0603"),
+    (re.compile(r'(?<!\d)0805(?!\d)'), "0805"),
+    (re.compile(r'(?<!\d)(1206|1210|1812|2010|2512)(?!\d)'), "1206_or_larger"),
+]
+
+def _discrete_smt_rule(footprint_name: str) -> tuple[dict, str] | None:
+    """Sub-classify a discrete SMT component by package code."""
+    for pattern, label in _DISCRETE_PACKAGES:
+        if pattern.search(footprint_name):
+            for rule in DISCRETE_SMT_RULES:
+                if rule["label"] == label:
+                    return rule, f"discrete-SMT/{label}"
+    # Recognised discrete library but no imperial code (e.g. oscillator,
+    # custom inductor, electrolytic cap) — use the 1206+ rule as a safe default.
+    return DISCRETE_SMT_RULES[-1], "discrete-SMT/no-package-code"
+
+
+def _active_smt_rule(footprint: str) -> tuple[dict, str]:
+    """Sub-classify an active SMT component by smallest body dimension (mm)."""
+    fp_name = footprint.split(":")[-1]      # e.g. "MSOP-12_3x4.039mm_P0.65mm"
+
+    # 1. Try to extract body dimensions from the footprint name.
+    #    KiCad encodes these as e.g. "3x4.039mm" or "1.6x1.6mm".
+    m = re.search(r'(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)mm', fp_name, re.IGNORECASE)
+    if m:
+        body = min(float(m.group(1)), float(m.group(2)))
+        source = f"{m.group(1)}x{m.group(2)} mm body"
+    else:
+        # 2. Fall back to the named package lookup table.
+        #    Strip trailing qualifiers like "_Handsoldering" before looking up.
+        sot_base = fp_name.split("_")[0]    # e.g. "SOT-23-6"
+        body = PACKAGE_BODY_MM.get(sot_base)
+        source = f"{sot_base} body" if body is not None else None
+
+    if body is not None:
+        for rule in ACTIVE_SMT_RULES:
+            if rule["max_body"] is None or body <= rule["max_body"]:
+                return rule, f"active-SMT/{rule['label']} ({source})"
+
+    # No size info available — use the most conservative rule.
+    return ACTIVE_SMT_RULES[0], "active-SMT/unknown-size"
+
+
+def _lib_matches(library: str, lib_set: set[str]) -> bool:
+    """True if `library` equals or starts with any entry in lib_set."""
+    for prefix in lib_set:
+        if library == prefix or library.startswith(prefix + "_"):
+            return True
+    return False
+
+
+def classify(footprint: str) -> tuple[dict, str]:
+    """Return (rule_dict, human_label) for a KiCad footprint string."""
+    library = footprint.split(":")[0] if ":" in footprint else ""
+
+    if _lib_matches(library, _MOUNTING_LIBS):
+        return MOUNTING_HOLE_RULE, "mounting-hole"
+
+    if _lib_matches(library, _TEST_POINT_LIBS):
+        return TEST_POINT_RULE, "test-point"
+
+    if _lib_matches(library, _MODULE_LIBS):
+        return MODULE_RULE, "module"
+
+    if _lib_matches(library, _THROUGH_HOLE_LIBS):
+        return THROUGH_HOLE_RULE, "through-hole"
+
+    if _lib_matches(library, _DISCRETE_SMT_LIBS):
+        return _discrete_smt_rule(footprint)
+
+    if _lib_matches(library, _ACTIVE_SMT_LIBS):
+        return _active_smt_rule(footprint)
+
+    # Unknown library — try package-code detection, then body-size extraction,
+    # before giving up. This handles custom libraries (e.g. component-lib)
+    # whose footprint names still encode dimensions like "4x4mm" or "0402".
+    result = _discrete_smt_rule(footprint)
+    if result[1] != "discrete-SMT/no-package-code":  # matched a real package
+        return result
+
+    result = _active_smt_rule(footprint)
+    if "unknown-size" not in result[1]:               # body dims found in name
+        return result
+
+    return FALLBACK_RULE, f"fallback (lib: {library or 'none'})"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# QUANTITY CALCULATION
+# ─────────────────────────────────────────────────────────────────────────────
+
+def order_qty(qty_per_board: int, num_boards: int, rule: dict) -> int:
+    """Total quantity to order, including overage.
+
+    The percentage overage is added on top of the base quantity. The minimum
+    is a floor on the *total* order — it only takes effect when the percentage-
+    based total would be lower than the minimum (i.e. for small runs).
+    """
+    base = qty_per_board * num_boards
+    with_overage = base + math.ceil(base * rule["percent"])
+    return max(with_overage, rule["minimum"])
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MAIN
+# ─────────────────────────────────────────────────────────────────────────────
+
+def process_bom(bom_path: str, num_pcbs: int, output_path: str):
+    bom_path = Path(bom_path)
+    output_path = Path(output_path)
+
+    with bom_path.open(newline="", encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f)
+        fieldnames = reader.fieldnames or []
+        rows = list(reader)
+
+    out_fields = list(fieldnames) + ["Order Qty", "Overage Rule"]
+    dnp_count = 0
+
+    with output_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=out_fields)
+        writer.writeheader()
+
+        for row in rows:
+            out_row = dict(row)
+            if is_dnp(row):
+                out_row["Order Qty"] = 0
+                out_row["Overage Rule"] = "DNP"
+                dnp_count += 1
+            else:
+                qty_per_board = int(row.get("Qty", 1))
+                rule, label = classify(row.get("Footprint", ""))
+                out_row["Order Qty"] = order_qty(qty_per_board, num_pcbs, rule)
+                out_row["Overage Rule"] = label
+            writer.writerow(out_row)
+
+    print(f"Done! Output written to: {output_path}")
+    print(f"  Boards   : {num_pcbs}")
+    print(f"  Components: {len(rows)} total, {dnp_count} DNP")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Calculate BOM order quantities with overage.")
+    parser.add_argument("--bom",    required=True,           help="Path to input BOM CSV")
+    parser.add_argument("--pcbs",   required=True, type=int, help="Number of PCBs to populate")
+    parser.add_argument("--output", default="order_bom.csv", help="Output CSV path (default: order_bom.csv)")
+    args = parser.parse_args()
+    process_bom(args.bom, args.pcbs, args.output)
